@@ -1,4 +1,4 @@
-<h1>New project: 8x8 RED-GREEN Double Color Dot Matrix.</h1>
+<h2>New project: 8x8 RED-GREEN Double Color Dot Matrix.</h2>
 <br>
 Schematics 8x8x2 matrix:
 <br>
