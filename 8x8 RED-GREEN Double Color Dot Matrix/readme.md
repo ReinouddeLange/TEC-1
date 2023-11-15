@@ -1,5 +1,5 @@
 New project: 8x8 RED-GREEN Double Color Dot Matrix.
-
+<br>
 Schematics 8x8x2 matrix
 <img width="511" alt="Schermafbeelding 2023-11-15 om 17 18 35" src="https://github.com/ReinouddeLange/TEC-1/assets/6297024/a68a6e21-39cc-465f-8634-0132ed78c1ab">
 
