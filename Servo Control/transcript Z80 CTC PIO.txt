@@ -1,0 +1,89 @@
+INTRODUCTION 
+
+Hello, in this video I will show you how to use the main peripherals of a microcomputer. 
+I will use the Timer device for input and output. 
+To exemplify the use of these devices in a microcomputer with z80, I will use the PIO and CTC, both from the Z80 family. 
+I have a small keyboard connected, that by pressing a few keys I vary the angle of the servo motor. 
+The microcomputer will receive the data from the keyboard by the PIO, which will form a time base for the CTC to time the signals needed to control the servo motor, these signals will be sent later by the PIO. 
+This program will be a simple problem that will do just one task. 
+I will not use interrupts for these devices, I will only show how to configure them peripherals, as interruptions are useful in case of multiple tasks, I will leave it to the next video to be able to explain in more detail the use of interrupts in a microcomputer with the Z80 . 
+
+SERVO MOTOR
+To use a servo motor it is necessary to send a very specific signal to be able to indicate to it the angle that it must be. 
+This is a signal that must be sent to the servo motor to control so that it rotates from 0 to 180 degrees, I have to send a constant pulse of 20 milliseconds, where, the time that the pulse remains at a high level indicates which is the degrees that the servo motor should be. 
+If I send a signal with a high level of 550 microseconds I will have the minimum position that would be 0 degrees, if I have 2.4 milliseconds in the high level I will have the position of 180 ° that would be the maximum position, varying this time I also vary the angle of the servo motor. 
+
+PIO 
+The PIO as its name says is a circuit of parallel input and output ports, and has two 8-bit ports, port A and port B. 
+As it is in the same family as the Z80 its connections are fully compatible, here it is the data bus and the control pins, and these two pins here must be connected to the Z80 address bus to make the selection, as shown in this table, selecting to read or write data or write data for door control. 
+The PIO has 4 operating modes: zero output mode, input mode 1, bidirectional mode 2, and port A serves both for data input and output and Bit Control mode 3 where each bit of the port can be used. 
+be for both input and output. 
+It is similar to modern microcontrollers. 
+
+PIO MODE 
+To configure which mode to use, you must press the control register of each port, to indicate that it is a module selection , the initial four Bits must be equal to 1, and the last two Bits indicated which mode itself, as here in the table. 
+As I would only use the input and output mode in this program, I will load these two values ​​here. 
+For bidirectional mode, port A is used for both output and data input, and the data flow is controlled by these pins here, to better understand how it works it is recommended that I see the PIO Datasheet o to check the Timings in the bidirectional function . 
+If you choose the Bit Control mode, each bit of the port you selected can be either for the output or for entering data, to make the configuration , the selection, of each bit saying which will be input and which will be the output due loading this other register at the value 0 indicates that this bit will be output and at value 1 it indicates that this bit will be input. 
+
+PIO INT 
+Now I will show the settings for interruption in the PIO, even if we do not use it remembering that I will explain better about interruptions in the next video. 
+The interrupt vector will be Low Byte of the subroutine address to indicate that it is an interrupt vector , bit 0 must be zero. 
+To configure the interrupt, another Byte must be sent, to indicate that it is an interrupt control, the bits must be set in this way, bit four here will inform whether the interrupt mask will be used or not, bit5 is for configuring whether the interruption will happen on the signal's falling edge or on the rising edge, bit 6 will inform the logic and which will be used to detect the interruption other than the OR logic, each bit that has been changed will be interrupted, if it is the AND logic just as all the bits were equal it will be interrupted, and bit 7 itself, enables the interruption, if the bit 4 is activated indicating that you will be using the interrupt mask you must then load the mask value, the mask will hide a bit that you do not want to use. 
+And if it is a bit that will be used, it should be zero, if it is a bit that does not will be used will be 1. 
+The last region strador is used to disable or enable interruption in the middle of the problem without affecting these other registers here to indicate that it is this register, the bits must be indicated. 
+As they are set here, the data must be loaded in the order they are here. 
+For example, if you are going to use bit control mode with interrupt, you must load this register indicating the Bit Control mode , then this register to indicate which bit will be input and output, then the interrupt vector to address your routine, the configuration that was used in the interruption, and if you choose to use the mask which will be the bitmask, the one in the middle of the program wants to disable or enable the interruption just load this register here. 
+
+8255 / PORTS 
+Speaking quickly of other types of ports, in addition to the PIO, there is also 8255, this device here, it has three parallel ports and its settings are very easy, a quick look at the Datasheet is enough. 
+The other way to make an output port is with registers, an example is the 74273 which has 8 recorders (flip-flops) that can be used as an output port, they are directly connected to the data bus and when the necessary address is generated, the value of the data bus is registered and is outgoing ports. 
+and I use this type of simple port here, here I have 74273 connected a display, and here too, afterwards I will use this display to indicate the angle that the servo motor is, turning on each bit of it. 
+To make an input port, you can use a 3-state buffer 74244 can be used for this, connected here the data bus and here the input part, and being addressed here when, addressed, it releases the data to the bus, where the Z80 collects them. 
+
+CTC
+Now talking about the timer the CTC is a countdown counter, which has four channels. 
+They can be used in the timer and counter function, to select which channel to use, pins CS0 and CS1 must be connected to the processor address bus, along with the data bus and the other control pins, here is the clock input pin and the output pin when the value reaches zero. 
+With the CTC in the timer function it will decrement the value from a system clock, which can be divided by 16 or 256, from the counter function it will decrement the value from an external pulse, this pulse comes from this input pin can be a button, or other device. 
+In both modes when the CTC counter value goes to zero, it activates this pin here, to indicate that the count has reached its limit, and that the timer has reached zero, and then it automatically loads to the new constant value. 
+to be decremented little by little. 
+
+CTC SETUP
+The CTC has one register per channel to make the necessary settings, each bit is responsible for each item, bit 0 being one informs that it is data for configuration, bit 1 informs a reset in the count to zero indicates a continuous count, the bit 2 indicates that after sending this control data, the value of the time constant will also be sent, bit 3 is only used in timer mode, it indicates whether the counting will be automatic, or it will need an external pulse to start, bit 4 is mostly used for the counter function, as it indicates whether the value will be discounted when it has a falling edge or a rising edge, bit 5 is only used in timer mode, and it is the division factor , if it is set to 0 the system clock division factor will be divided by 16, if set to one the division value will be 256, bit 6 is responsible for the mode itself, if it is equal to zero it will be timer mode, if it is equal to the mode of counter AND bit 7 indicates if the inter interruption in this channel, as it only uses CTC as a timer for my problem, I'll just load these values​here to indicate it as a timer, and remembering that these functions are valid separately for the 4 channels. 
+
+CTC CONSTANT 
+The time constant must be loaded right after the settings, its maximum value is 256, because of the 8 bits to calculate the value of the time constant, the system clock and the factor value must be taken into account. 
+of division, sedo 16 or 256. 
+For example, for general min 20 milliseconds, I need to divide my clock of 2 megahertz by 256, divide again by the value of the Constant that they have to carry, which will be 157, with that I will have a period of 20 milliseconds, then to generate the shorter timings I will have to again divide my system clock, divide by is the factor, and dividing by 4 I have the 550 microseconds needed to activate the servo motor at the 0° position , and if I divide by 18 I will have 2.3 milliseconds, which is necessary to put in the 180 degree position, approximately in reality, by varying the time constant between 4 and 18 I can vary the times needed for me to turn the servo motor, the values of the time constants and m hexadecimals are equivalent to this here, these values​and reload in the program and then, 
+
+CTC INT 
+And if you are going to use the CTC interrupt you must also load the interrupt vector, to indicate that it is an interrupt vector, bit 0 must be equal to zero, to send the interrupt vector byte it must always load channel zero, and to address which channel it will use, add the channel value in these two bits here, remembering that the value of these two bits will be added to the value of interrupt to address your interrupt routine. 
+
+SCHEMATIC 
+Here I have a schematic of the connection of the two devices, the CTC is connected to the processor data bus along with some control pins, CS0 and CS1 is connected to A0 and A1, to generate the pulse that enables CTC is made with 74138 , which is activated with the sum of the A6 and the I/O request (IORQ), it also generates the signal from the PIO select chip, in the case of the CTC I will not use its clock and output ports, because I will use it in the timer function, and in the timer the CTC takes the system clock itself. 
+Also for the PIO here is the data bus, and the controls pins, to select whether I want port A or port B, is wired to A0 and to select whether I want controls or data from PIO, A1. 
+Its select chip is made here, here port A will be connected as output, connected to it I have my servo motor, here on port B is my keyboard, but I just indicated it by a button, because the eight buttons are connected to it pull-down logic. 
+In both devices there is a diode connected to the interrupt pin, because as they are connected together the diode acts as an OR gate, and this wire here a to indicate the interrupt priority. 
+
+PROGRAM 
+So here I have a program that will make use of the devices and to control the servo, this problem I made a way today I can get eight positions, in the servo motor, I could make a way where I have more positions, but I did it like this for cause of the display, where I want to show what position it is. 
+So here I have the address mapping of the input and output devices. 
+And the address of my variables in RAM memory, and here there is a main problem. 
+I load the daughter's pointer, call the function that makes the initial settings, then there's the write_servo function , which will write the signal to the PIO and will also write and read the CTC, and then there's the read_button function that will read the keyboard, and increasing the value that goes to CTC, to generate the servo motor angle, and an infinite loop always keeping these two functions is performed. 
+In the setup function I will configure PIO port A, as output, putting this value on it, on the control pin and on port A, and disabling the interrupt on it, on port B I will configure it as input, loading this value to it, then I will configure the CTC of channel zero with a timer, and put the value of 20 milliseconds on it, and here I will also start the values ​​of my variables, and here I just clean my output ports. 
+In the write_servo function I will read the channel 0 of the CTC where I have the 20 milliseconds, when this time reaches zero, I will set the servo PIO output to high, then I will set channel 1 as a timer, and put the angle value on it, and then I go there to read channel 1 and wait until it reaches zero, when it reaches zero I will put 0 on port A of the PIO, putting the servo signal at low. 
+After that, there is the function that reads the button, this function will load the data from the PIO and check bit 3, here is an l logic to check if the button was only pressed once, but when the button is only pressed once, I will slide my bit, I will also increment my angle value, and then I will again load the keyboard value and check if the other key was activated, again there is a logic to check if the button was pressed once, and this time I slide the bit to the left and decrease or the angle that goes to the CTC. 
+So this is a very simple program, it will configure the hardware, it will put the signal at the PIO output to the servo motor based on the time it reads, and then it will read the PIO input port to see if any buttons are on the keyboard has been activated, and if it is activated, it increases or decreases the value that will indicate the angle of the servo motor. 
+
+OPERATION 
+Now I'm going to show the program working so, here I have the microcomputer I've already saved the program data in memory, on the bottom board I have the processor and the memories, here on the second board I have the peripherals for the PIO and the CTC, they are in here, here on the little keyboard connected to port B of the PIO, here is the output of the AE port, here the output and output ports CTC input, on this third board, I have some simple output ports, and I have here connected the display where I'm going to use the bit, and here on this side there's a servo motor, so moving (pressing) the buttons here, this and this , pressing, you can see that the bit already slides to the side, and to the other, the servo is not connected yet but the PIO is already sending the signals, and I'm going to connect the servo to an external source, I turn on the source, and I'm going to connect its signal pin to port A of the PIO, and now pressing the key and the servo motor moves, as it is in the program, so pressing the buttons the servo angle varies, because the PIO receives data from the keyboard and sends this data to form a time base to the CTC, and sends these pulses later by PIO. 
+
+SIGNS ON THE OSCILLOSCOPE 
+So now I connected my oscilloscope tip to the PIO output to view the signal sent to the servo motor, this here is the signal here is at the minimum position as indicated on the display, if I measure here I have a pulse equivalent to 20 milliseconds And my pulse is high here, and it has an approximate period of 550 microseconds now pressing the keyboard here the servo moves, you can see that the pulse width also increases and as servo is decreasing the size (angle), the pulse decreases the pulse with its maximum size it has apro approximately 2.27 milliseconds and varying in the eight possible positions, here now I connected another oscilloscope tip to monitor the output of CTC channel 0 which is the one that generates the 20 millisecond course , you can see here on the screen that every 20 milliseconds I I have a CTC output. 
+This signal is varying like this, as I have no load on its output, it has this type of variation, but if I added a resistor to its output, this signal would be better, I 'm not doing it this because I am not using this signal. 
+So now I'm going to put the second channel of the oscilloscope on channel 1 of the CTC, where I have the variant pulses, the smaller pulses I'm going to zoom in with the oscilloscope Here then I have a minimum value of 570 microseconds, increasing the pulse increases the output stroke, the output pulse of the PIO and the pulse of the CTC. 
+The program is this I am using the main peripherals of a microcomputer, the PIO and the CTC , an input and output device, and a timer device, so I'm using the two peripherals to generate a signal capable of moving a servo motor. 
+So in the next video I'll talk more about using microcomputer interrupts with the Z80. 
+I will also record another video explaining more about how I write data to eeprom memory. 
+To learn more check the links in the description, and any questions leave a comment. 
+Leave a like, and thank you so much for watching this far.
