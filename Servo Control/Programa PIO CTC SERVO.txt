@@ -1,0 +1,199 @@
+; Programa que varia o angulo do servo, selecionado pelo teclado
+; Pulso para o servo a cada 20mS, e tempo em HIGH determina a posição, variando de .55mS a 2.3mS, 0° a 180°
+; Bit 1 do teclado (left) indica menos 22.5°, e Bit 3 (right) aumenta o angulo
+; As 8 posições são ilustradas no POUT_D, deslocando um bit
+
+; PIO Port A Output(Servo), PIO Port B Input(keyboard)
+; CTC channel 0 20mS, CTC channel 1 (0.55-2.3mS)
+; CTC 2MHz/256/157 = 20mS
+
+; Tempo do CTC_1 é sempre impar, de 5d a 19d, inc e dec duas vezes para opter valores impares(os limites tambem)
+; Verificar um valor a mais no ctc, pois ele não conta o zero 
+					
+;4	6	8	A	C	E	10	12	|Hexadecimal (CTC)
+;.55	.76	1.024	1.28	1.5	1.8	2.048	2.3	|MiliSegundos
+;0	22.5	45	67.5	90	112.5	135	157.5	|Graus
+;7	6	5	4	3	2	1	0	|Bit POUT_D
+
+;Bit = 1 , flag Zero = 0
+
+; LeonardoPJ
+; 04/05/2021
+
+;-------------------------Mapeamento de Endereços de I/Os (Endereço Atualizado)
+POUT_A	= 24h		; Port Output A - Control
+POUT_B	= 28h		; Port Output B - Display LCD
+POUT_C 	= 2Ch		; Port Output C - Display 7seg, externa
+POUT_D 	= 30h		; Port Output D - Externa
+PIN_A   = 44h		; Port Input A
+CTC_0 	= 44h		; CTC Channel 0
+CTC_1 	= 45h		; CTC Channel 1
+CTC_2 	= 46h		; CTC Channel 2
+CTC_3 	= 47h		; CTC Channel 3
+PIO_DA	= 48h		; PIO Data A
+PIO_DB	= 49h		; PIO Data B
+PIO_CA	= 4Ah		; PIO Control A
+PIO_CB	= 4Bh		; PIO Control B
+DART_DA	= 4Ch		; DART Data A
+DART_DB = 4Dh		; DART Data B
+DART_CA	= 4Eh		; DART Control A
+DART_CB	= 4Fh		; DART Control B
+SIO_DA	= 50h		; SIO Data A
+SIO_DB	= 51h		; SIO Data B
+SIO_CA	= 52h		; SIO Control A
+SIO_CB	= 53h		; SIO Control B
+
+;-------------------------Mapeamento de Endereços de Memoria RAM
+Angle_Value	= 2000h		; Varivel do valor do tempo para o CTC, dita o angulo
+Flag_Button	= 2001h		; Flag do estado anterior do botão, Bit 1 <-- ,Bit 3 -->  
+Bit_Position	= 2002h		; Posição do bit que ilustra o angulo
+StackPointer	= 3FFFh		; Final da RAM, SP 
+;---------------------------------------------------------------------
+	.org	0000h		 
+
+	nop
+	
+	ld	SP, StackPointer	; Ponteiro da pilha
+	
+	call	Setup			; Configura o hardware
+
+Main:
+	call	Write_Servo		; Gera o sinal para o servo, pelos timers
+
+	call	Read_Button		; Lê o teclado, atribui valor do angulo, e desloca o bit (tempo de execução = 110uS, sem botão)
+
+	jp	Main
+
+	halt
+
+;---------------------------------------------------------------------
+Setup:	
+
+	ld	a, 0Fh			; Setup PIO PORT A OUTPUT
+	out	(PIO_CA), a
+	ld	a, 03h			; Desabilita a interrupção
+	out	(PIO_CA), a
+
+	ld	a, 4Fh			; Setup PIO PORT B INPUT
+	out	(PIO_CB), a
+	ld	a, 03h			; Desabilita a interrupção
+	out	(PIO_CB), a
+	
+	ld	a, 37h			; Setup Timer, /256
+	out	(CTC_0), a
+	ld	a, 9Dh			; 20ms (157d)
+	out	(CTC_0), a
+	
+	ld	a, 05h			; Valor inicial do angulo (0°)
+	ld	hl, Angle_Value
+	ld	(hl), a
+	ld	a, 80h			; Posição inicial do Bit (0°)
+	ld	hl, Bit_Position	
+	ld	(hl), a
+	
+	ld	a, 00h			; Clear POUTs
+	out	(POUT_A), a
+	out	(POUT_B), a
+	out	(POUT_D), a
+	xor	0FFh
+	out	(POUT_C), a
+	
+	ret
+;---------------------------------------------------------------------
+Write_Servo:
+
+loop_ctc1:				; Lê o canal de 20mS, quando der o tempo executa 
+	nop
+	in 	a, (CTC_0)
+	nop
+	cp	01h
+	jp	nz, loop_ctc1
+	ld	a, 0F0h
+	out	(PIO_DA), a		; Servo HIGH
+	
+	ld	a, 37h			; Setup timer, /256, reset
+	out	(CTC_1), a
+	ld	hl, Angle_Value		; Valor da variavel do angulo
+	ld	a, (hl)
+	out	(CTC_1), a	
+
+loop_ctc2:				; Lê o canal variavel, quando der o tempo executa 
+	nop
+	in 	a, (CTC_1)
+	nop
+	cp	01h
+	jp	nz, loop_ctc2
+	ld	a, 00h
+	out	(PIO_DA), a		; Servo LOW	
+
+	ret
+;---------------------------------------------------------------------	
+Read_Button:				
+	nop
+	in 	a, (PIO_DB)		; Input teclado PIO B
+	nop
+	bit	3, a			; Verifica tecla Right -->
+	jp	z, cont_bit3
+	ld	hl, Flag_Button		
+	bit	3, (hl)			; Verifica flag estado anterior bit 3
+	jp	nz, jump_cont
+ 	set	3, (hl)			; Set flag estado anterior bit 3
+	ld	hl, Bit_Position	; Desloca o bit para direita
+	rrc	(hl)
+	ld	hl, Angle_Value
+	inc	(hl)			; Incrementa duas vezes o valor do angulo
+	inc	(hl)
+	ld	a, 15h			
+	cp	(hl)			; Se for 21d volta a 19d
+	jp	nz, jump_cont
+	dec	(hl)
+	dec	(hl) 
+	ld	a, 01h			; Limite da direita do bit
+	ld	hl, Bit_Position
+	ld	(hl), a
+cont_bit3:
+	ld	hl, Flag_Button		; Reset flag estado anterior bit 3
+	res	3, (hl)	
+jump_cont:
+
+	nop
+	in 	a, (PIO_DB)		; Input teclado PIO B			
+	nop
+	bit	1, a			; Verifica tecla Left <--
+	jp	z, cont_bit1
+	ld	hl, Flag_Button		
+	bit	1, (hl)			; Verifica flag estado anterior bit 1
+	jp	nz, jump_cont2
+ 	set	1, (hl)			; Set flag estado anterior bit 1
+	ld	hl, Bit_Position	; Desloca o bit para esquerda
+	rlc	(hl)
+	ld	hl, Angle_Value
+	dec	(hl)			; Decrementa o valor do angulo
+	dec	(hl)
+	ld	a, 03h			
+	cp	(hl)			; Se for 3d volta a 5d
+	jp	nz, jump_cont2
+	inc	(hl)
+	inc	(hl) 
+	ld	a, 80h			; Limite da esquerda do bit
+	ld	hl, Bit_Position
+	ld	(hl), a
+cont_bit1:
+	ld	hl, Flag_Button		; Reset flag estado anterior bit 1
+	res	1, (hl)	
+jump_cont2:
+
+	ld	hl, Bit_Position	; Carrega o bit na porta
+	ld	a, (hl)
+	out	(POUT_D), a
+
+	ret
+
+;---------------------------------------------------------------------
+	nop
+	nop
+	nop	
+	nop
+	nop
+	
+	.end

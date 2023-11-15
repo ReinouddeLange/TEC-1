@@ -1,0 +1,244 @@
+; Programa lê o teclado, e enviar o caracter para o computador
+; Leitura do teclado feita pelo SIO, e valor recebido endereça tabela, para converter para ASCII, enviando para o computador pelo DART
+; Z80 com teclado PS/2 e UART - DART e SIO - Serial Communication
+
+; Tabela é carregada na RAM, para facilitar o endereçamento na conversão 
+; Envio para o computador por UART pelo DART com 57600 de baud rate
+
+; LeonardoPJ
+; 23/03/2021
+
+;-------------------------Mapeamento de Endereços de I/Os
+POUT_A	= 04h		; Port Output A - Control
+POUT_B	= 08h		; Port Output B - Display LCD
+POUT_C 	= 0Ch		; Port Output C - Display 7seg, externa
+POUT_D 	= 10h		; Port Output D - Externa
+PIN_A   = 04h		; Port Input A
+CTC_0 	= 24h		; CTC Channel 0
+CTC_1 	= 25h		; CTC Channel 1
+CTC_2 	= 26h		; CTC Channel 2
+CTC_3 	= 27h		; CTC Channel 3
+PIO_DA	= 28h		; PIO Data A
+PIO_DB	= 29h		; PIO Data B
+PIO_CA	= 2Ah		; PIO Control A
+PIO_CB	= 2Bh		; PIO Control B
+DART_DA	= 2Ch		; DART Data A
+DART_DB = 2Dh		; DART Data B
+DART_CA	= 2Eh		; DART Control A
+DART_CB	= 2Fh		; DART Control B
+SIO_DA	= 30h		; SIO Data A
+SIO_DB	= 31h		; SIO Data B
+SIO_CA	= 32h		; SIO Control A
+SIO_CB	= 33h		; SIO Control B
+
+;-------------------------Mapeamento de Endereços de Memoria	
+Table_RAM	= 2015h		; Começo da tabela na RAM
+StackPointer	= 3FFFh		; Final da RAM, SP 
+
+;---------------------------------------------------------------------
+	.org	0800h		 
+
+	nop
+	
+	ld	SP, StackPointer	; Ponteiro da pilha
+	
+	call	Setup_SIO		; Configura os registradores do SIO
+	call	Setup_DART		; Configura os registradores do DART
+
+	ld	a, 0Dh			; Retorna o cursor para o inicio da linha 
+	out 	(DART_DA), a
+	ld	a, 0Ah			; Avança o curso uma linha para baixo
+	out	(DART_DA), a
+	ld	a, 3Eh			; Envia ">"
+	out 	(DART_DA), a
+
+	call 	Load_Table		; Carrega a tabela na RAM
+Main:
+	call	Read			; Lê os dados do SIO e do teclado PS/2
+	call	Converter		; Converte os dados de PS/2 para ASCII, endereçando a tabela
+	call	Write			; Envia os dados para o computador por UART
+
+	call	Read			; Repete o Read por causa do protoloco PS/2
+	call	Read			; Mas esses dados, são ignorados
+
+	jp	Main
+
+	halt
+
+;---------------------------------------------------------------------
+Setup_SIO:				; Configura os registradores do SIO
+	ld	c, 0Ah
+	ld	hl, setup_sio_data
+setup_sio_loop:
+	ld	a, (hl)
+	out	(SIO_CA), a
+	inc	hl
+	dec	c
+	jp	nz, setup_sio_loop
+
+	ret
+
+;---------------------------------------------------------------------
+Setup_DART:				; Configura os registradores do DART
+	ld	c, 0Ah
+	ld	hl, setup_dart_data
+setup_dart_loop:
+	ld	a, (hl)
+	out	(DART_CA), a
+	inc	hl
+	dec	c
+	jp	nz, setup_dart_loop
+
+	ret
+
+;---------------------------------------------------------------------
+Load_Table:				; Carrega a tabela na ram
+	ld	hl, table
+	ld	d, 20h			; endereço da ram 2015h
+	ld	e, 15h
+	ld	c, 39h			; 57 caracter
+loop_load_table:
+	ld	a, (hl)			; Coloca a tabela na ram
+	ld	(de), a
+	inc	hl
+	inc	e
+	dec	c
+	jp	nz, loop_load_table
+
+	ld 	e, 5Ah			; carregamento do "Enter"
+	ld	a, 0Dh
+	ld	(de), a
+
+	ld 	e, 66h			; carregamento do "BackSpace"
+	ld	a, 08h
+	ld	(de), a
+	
+	ret
+;---------------------------------------------------------------------
+Read:					; Lê os dados do SIO e do teclado PS/2
+loop_read:
+	nop
+	in	a, (SIO_CA)		; Read Register 0
+	nop	
+	bit	0, a			; Verifica bit 0, Rx available
+	jp	z, loop_read		; Se recebeu dado, continua, se não espera receber
+	nop
+	in	a, (SIO_DA)		; Read Register Data SIO
+	nop	
+	ld	b, a 		
+	
+	ret
+
+;---------------------------------------------------------------------
+Write:					; Envia os dados para o computador por UART
+	ld 	a, b
+	out 	(DART_DA), a		; Envia o caracter para o computador
+	out	(POUT_D), a		; Envia para o display
+	
+	ret
+
+;---------------------------------------------------------------------
+Converter:				; Converte os dados de PS/2 para ASCII, endereçando a tabela
+	ld	a, b
+	ld	h, 20h			; High Byte da RAM
+	ld	l, a			; Low Byte da RAM vem do teclado
+	ld	a, (hl)			; Usa o Byte do teclado para apontar o caracter
+	ld	b, a			
+	ret
+
+;---------------------------------------------------------------------
+setup_dart_data:
+	.defb        00h, 18h		; reset
+	.defb        01h, 80h		; wait enable
+	.defb        03h, 0C1h		; Rx 8bits, enable Rx
+	.defb        04h, 84h		; no parity, 1 stop bit, x32
+	.defb        05h, 68h 		; Tx 8bits, enable tx
+
+setup_sio_data:
+	.defb	     00h, 18h		; reset
+	.defb        01h, 00h		; (no use)
+	.defb        03h, 0C1h		; Rx 8bits, enable Rx
+	.defb        04h, 05h		; Parity odd, 1 stop bit, x1 clk
+	.defb        05h, 00h 		; No Tx
+
+;----------------------------------------------------------------------------
+;		ASCII		CHAR		PS/2		(57 caracter)		
+table:		
+	.defb	51h	;	"Q"		15h
+	.defb	31h	;	"1"		16h
+	.defb	00h	;			17h
+	.defb	00h	;			18h
+	.defb	00h	;			19h
+	.defb	5Ah	;	"Z"		1Ah
+	.defb	53h	;	"S"		1Bh
+	.defb	41h	;	"A"		1Ch
+	.defb	57h	;	"W"		1Dh
+	.defb	32h	;	"2"		1Eh
+	.defb	00h	;			1Fh
+	.defb	00h	;			20h
+	.defb	43h	;	"C"		21h
+	.defb	58h	;	"X"		22h
+	.defb	44h	;	"D"		23h
+	.defb	45h	;	"E"		24h
+	.defb	34h	;	"4"		25h
+	.defb	33h	;	"3"		26h
+	.defb	00h	;			27h
+	.defb	00h	;			28h
+	.defb	20h	;	"Space"		29h
+	.defb	56h	;	"V"		2Ah
+	.defb	46h	;	"F"		2Bh
+	.defb	54h	;	"T"		2Ch
+	.defb	52h	;	"R"		2Dh
+	.defb	35h	;	"5"		2Eh
+	.defb	00h	;			2Fh
+	.defb	00h	;			30h
+	.defb	4Eh	;	"N"		31h
+	.defb	42h	;	"B"		32h
+	.defb	48h	;	"H"		33h
+	.defb	47h	;	"G"		34h
+	.defb	59h	;	"Y"		35h
+	.defb	36h	;	"6"		36h
+	.defb	00h	;			37h
+	.defb	00h	;			38h
+	.defb	00h	;			39h
+	.defb	4Dh	;	"M"		3Ah
+	.defb	4Ah	;	"J"		3Bh
+	.defb	55h	;	"U"		3Ch
+	.defb	37h	;	"7"		3Dh
+	.defb	38h	;	"8"		3Eh
+	.defb	00h	;			3Fh
+	.defb	00h	;			40h
+	.defb	00h	;			41h
+	.defb	4Bh	;	"K"		42h
+	.defb	49h	;	"I"		43h
+	.defb	4Fh	;	"O"		44h
+	.defb	30h	;	"0"		45h
+	.defb	39h	;	"9"		46h
+	.defb	00h	;			47h
+	.defb	00h	;			48h
+	.defb	00h	;			49h
+	.defb	00h	;			4Ah
+	.defb	4Ch	;	"L"		4Bh
+	.defb	00h	;			4Ch
+	.defb	50h	;	"P"		4Dh
+;---------------------------------------------------------------------
+	.end
+
+
+205d bytes
+0031FF3FCD2C08CD3A083E0DD32C3E0AD32C3E3ED32CCD4808CD6408CD7908CD7308CD6408CD6408C31908760E0A218A087ED332230DC23108C90E0A2180087ED32E230DC23F08C921940816201E150E397E12231C0DC251081E5A3E0D121E663E0812C900DB3200CB47CA640800DB300047C978D32CD310C97826206F7E47C90018018003C1048405680018010003C10405050051310000005A534157320000435844453433000020564654523500004E42484759360000004D4A5537380000004B494F3039000000004C0050
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
