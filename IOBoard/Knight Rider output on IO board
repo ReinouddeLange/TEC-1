@@ -1,0 +1,27 @@
+0800                          .ORG   $800   
+0800   3E 01                  LD   A,01   
+0802   D3 03                  OUT   (3),A   
+0804   07                     RLCA   
+0805   F5                     PUSH   AF   
+0806   CD 00 09               CALL   $900   
+0809   F1                     POP   AF   
+080A   FE 80                  CP   $80   
+080C   C2 02 08               JP   NZ,$802   
+080F   D3 03                  OUT   (3),A   
+0811   0F                     RRCA   
+0812   F5                     PUSH   AF   
+0813   CD 00 09               CALL   $900   
+0816   F1                     POP   AF   
+0817   FE 01                  CP   $01   
+0819   C2 0F 08               JP   NZ,$80F   
+081C   C3 02 08               JP   $802
+
+
+0900                          .ORG   $900   
+0900   11 FF FF               LD   DE,$FFFF   
+0903   1B                     DEC   DE   
+0904   7A                     LD   A,D   
+0905   B3                     OR   E   
+0906   C2 03 09               JP   NZ,$903   
+0909   C9                     RET   
+
